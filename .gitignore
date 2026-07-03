@@ -1,0 +1,29 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+
+# Logs
+*.log
+logs/
+
+# Generated wiki (per-project)
+.codewiki/
+.codewiki.new/
+
+# Editor
+.vscode/
+.idea/
+.DS_Store
+*.swp
+*.swo
+
+# OS
+Thumbs.db
+
+# Test coverage
+coverage/
+
+# Changesets (output only; .changeset/ is checked in)
+*.tgz

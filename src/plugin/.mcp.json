@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "code-wiki": {
+      "command": "node",
+      "args": ["${CLAUDE_PLUGIN_ROOT}/dist/code-wiki-mcp.mjs"],
+      "env": {
+        "CODEWIKI_CWD": "${workspaceFolder}"
+      }
+    }
+  }
+}

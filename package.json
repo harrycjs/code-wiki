@@ -1,0 +1,76 @@
+{
+  "name": "code-wiki",
+  "version": "0.1.0",
+  "description": "Token-efficient code wiki for Claude Code. Generates a browsable .codewiki/ index so models read summaries on-demand.",
+  "license": "Apache-2.0",
+  "type": "module",
+  "bin": {
+    "codewiki": "./dist/codewiki.mjs"
+  },
+  "main": "./dist/code-wiki.mjs",
+  "exports": {
+    ".": {
+      "import": "./dist/code-wiki.mjs"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "CHANGELOG.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "build": "unbuild && node scripts/postbuild.mjs",
+    "dev": "unbuild --watch",
+    "typecheck": "tsc --noEmit",
+    "lint": "biome check src tests examples",
+    "lint:fix": "biome check --write src tests examples",
+    "format": "biome format --write src tests examples",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "verify:grammars": "node scripts/verify-grammars.mjs",
+    "changeset": "changeset",
+    "version": "changeset version",
+    "release": "changeset publish"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.110.0",
+    "@modelcontextprotocol/sdk": "^1.29.0",
+    "commander": "^15.0.0",
+    "globby": "^16.0.0",
+    "gpt-tokenizer": "^3.4.0",
+    "ignore": "^7.0.0",
+    "p-queue": "^9.3.0",
+    "p-retry": "^8.0.0",
+    "pino": "^10.0.0",
+    "simple-git": "^3.36.0",
+    "web-tree-sitter": "^0.26.10"
+  },
+  "optionalDependencies": {
+    "tree-sitter-cli": "^0.26.10"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^2.5.0",
+    "@changesets/cli": "^2.31.0",
+    "@types/node": "^22.10.0",
+    "chokidar": "^5.0.0",
+    "happy-dom": "^20.0.0",
+    "tsx": "^4.23.0",
+    "typescript": "^5.7.0",
+    "unbuild": "^3.6.0",
+    "vitest": "^4.0.0"
+  },
+  "keywords": [
+    "claude-code",
+    "plugin",
+    "code-search",
+    "wiki",
+    "tree-sitter",
+    "mcp",
+    "context",
+    "tokens"
+  ]
+}
