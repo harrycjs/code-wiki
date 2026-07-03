@@ -22,10 +22,6 @@ import {
   buildFilePage,
   renderFile,
 } from './render/file-page.js'
-import {
-  buildSymbolPage,
-  renderSymbol,
-} from './render/symbol-page.js'
 import type {
   FileIndex,
   IndexTree,
@@ -35,6 +31,8 @@ import type {
   WikiMeta,
 } from './types.js'
 import { SCHEMA_VERSION } from './types.js'
+import { extractSymbols, isExtractable } from './extract/index.js'
+import { buildSymbolPage, renderSymbol } from './render/symbol-page.js'
 
 /**
  * Orchestrator: walks the repo, builds in-memory index, renders pages,
@@ -78,14 +76,13 @@ export async function buildWiki(opts: BuildOptions): Promise<BuildResult> {
   })
   log_.info({ count: walked.length }, 'walked files')
 
-  // 2. Build FileIndex entries. v1: tree-sitter symbol extraction is deferred
-  //    to M2; for now we expose file metadata + language detection + content hash.
+  // 2. Build FileIndex entries — with tree-sitter extraction for supported langs.
   const files: FileIndex[] = []
   const languages = new Set<Language>()
 
   for (const w of walked) {
     if (w.repoPath.startsWith('.codewiki/') || w.repoPath.startsWith('.git/')) continue
-    if (!w.language) continue // M1 only emits pages for languages we can name
+    if (!w.language) continue
     languages.add(w.language)
 
     let content = ''
@@ -96,8 +93,25 @@ export async function buildWiki(opts: BuildOptions): Promise<BuildResult> {
       continue
     }
     const hash = sha256Hex(content)
-    const summary = makeStaticFileSummary(content, w.repoPath)
-    const publicSymbols: Symbol[] = [] // filled in M2
+
+    // Extract symbols via tree-sitter (M2: TS/JS family; M3 adds more langs).
+    let symbols: Symbol[] = []
+    if (isExtractable(w.language)) {
+      try {
+        symbols = await extractSymbols({
+          source: content,
+          repoPath: w.repoPath,
+          language: w.language,
+        })
+      } catch (err) {
+        log_.debug({ path: w.repoPath, err: String(err) }, 'extractor failed')
+        symbols = []
+      }
+    }
+
+    const publicSymbols = symbols.filter((s) => s.visibility === 'public')
+    const summary = makeStaticFileSummary(content, w.repoPath, symbols, publicSymbols)
+
     files.push({
       repoPath: w.repoPath,
       absPath: w.absPath,
@@ -105,7 +119,7 @@ export async function buildWiki(opts: BuildOptions): Promise<BuildResult> {
       size: w.size,
       mtimeMs: w.mtimeMs,
       contentHash: hash,
-      symbols: [],
+      symbols,
       publicSymbols,
       oneLineSummary: summary,
     })
@@ -149,13 +163,20 @@ export async function buildWiki(opts: BuildOptions): Promise<BuildResult> {
   const arch = buildArchitecturePage(meta, files, cfg)
   await writeText(outNew, 'architecture.md', renderArchitecture(arch.page, arch.body))
 
-  // Per-file pages
+  // Per-file pages AND per-symbol pages (M2: TS/JS family extracted symbols).
   for (const f of files) {
     const fp = buildFilePage(f)
     filePagePaths.set(f.repoPath, fp.page.path)
     const safePath = path.join(outNew, fp.page.path)
     await fs.mkdir(path.dirname(safePath), { recursive: true })
     await fs.writeFile(safePath, renderFile(fp.page, fp.body), 'utf8')
+
+    for (const s of f.symbols) {
+      const sp = buildSymbolPage(s, f.repoPath)
+      const symPath = path.join(outNew, sp.page.path)
+      await fs.mkdir(path.dirname(symPath), { recursive: true })
+      await fs.writeFile(symPath, renderSymbol(sp.page, sp.body), 'utf8')
+    }
   }
 
   // Per-module pages
@@ -235,7 +256,17 @@ function buildIndexTree(
       stale: false,
       pagePath: filePagePaths.get(f.repoPath) ?? `files/${f.repoPath}.md`,
     })),
-    symbols: [],
+    symbols: files.flatMap((f) =>
+      f.symbols.map((s) => ({
+        id: s.id,
+        name: s.name,
+        kind: s.kind,
+        file: f.repoPath,
+        lineRange: s.lineRange,
+        pagePath: `symbols/${f.repoPath}/${s.kind}.${s.name}.md`,
+        tokens: 150,
+      })),
+    ),
   }
   return tree
 }
@@ -252,7 +283,12 @@ function estimateFileTokens(f: FileIndex): number {
   return Math.max(50, Math.round(f.size / 4))
 }
 
-function makeStaticFileSummary(content: string, repoPath: string): string {
+function makeStaticFileSummary(
+  content: string,
+  repoPath: string,
+  symbols: Symbol[] = [],
+  publicSymbols: Symbol[] = [],
+): string {
   const fname = repoPath.split('/').pop() ?? repoPath
   const lines = content.split(/\r?\n/)
   let firstNonBlank = ''
@@ -264,7 +300,12 @@ function makeStaticFileSummary(content: string, repoPath: string): string {
     }
   }
   const lc = lines.length
-  return `${fname}: ${lc} lines.${firstNonBlank ? ` Starts with: ${firstNonBlank.slice(0, 120)}` : ''}`
+  const parts: string[] = [`${lc} lines`]
+  if (symbols.length > 0) {
+    parts.push(`${symbols.length} symbols (${publicSymbols.length} public)`)
+  }
+  if (firstNonBlank) parts.push(`starts: \`${firstNonBlank.slice(0, 80)}\``)
+  return `${fname}: ${parts.join(', ')}.`
 }
 
 async function writeText(outDir: string, relPath: string, content: string): Promise<void> {

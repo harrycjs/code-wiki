@@ -5,7 +5,6 @@
     "moduleResolution": "bundler",
     "lib": ["ES2023"],
     "outDir": "./dist",
-    "rootDir": "./src",
     "strict": true,
     "noUncheckedIndexedAccess": true,
     "noImplicitOverride": true,
@@ -21,5 +20,6 @@
     "sourceMap": true
   },
   "include": ["src/**/*", "tests/**/*"],
-  "exclude": ["node_modules", "dist", ".codewiki"]
+  "exclude": ["node_modules", "dist", ".codewiki", "examples"]
 }
+

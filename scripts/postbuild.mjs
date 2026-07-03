@@ -26,6 +26,21 @@ async function main() {
   // Copy plugin surface
   await cpDir('src/plugin', 'dist/plugin')
 
+  // Copy WASM grammars into dist/grammars/ so the runtime can find them
+  // regardless of cwd. unbuild bundles code, breaking `import.meta.url` paths.
+  const grammarPairs = [
+    ['node_modules/tree-sitter-typescript/tree-sitter-typescript.wasm', 'typescript.wasm'],
+    ['node_modules/tree-sitter-typescript/tree-sitter-tsx.wasm', 'tsx.wasm'],
+    ['node_modules/tree-sitter-javascript/tree-sitter-javascript.wasm', 'javascript.wasm'],
+  ]
+  for (const [src, dst] of grammarPairs) {
+    try {
+      await cpFile(src, path.join('dist', 'grammars', dst))
+    } catch {
+      console.warn(`postbuild: skipped grammar ${dst} (not present)`)
+    }
+  }
+
   // Copy static docs into dist/
   for (const f of ['README.md', 'CHANGELOG.md', 'LICENSE']) {
     try {
@@ -34,7 +49,7 @@ async function main() {
       /* optional */
     }
   }
-  console.log('postbuild: copied plugin surface + docs to dist/')
+  console.log('postbuild: copied plugin surface + grammars + docs to dist/')
 }
 
 main().catch((err) => {

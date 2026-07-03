@@ -43,4 +43,27 @@ describe('buildWiki (integration)', () => {
     expect(typeof meta.fileCount).toBe('number')
     expect(typeof meta.moduleCount).toBe('number')
   })
+
+  it('extracts symbols for the TS family (M2)', async () => {
+    await buildWiki({ cwd: FIXTURE_ROOT })
+    const meta = JSON.parse(
+      await fs.readFile(path.join(FIXTURE_ROOT, '.codewiki', '.meta.json'), 'utf8'),
+    )
+    // fixture-ts should yield at least ~10 symbols across 5 TS files.
+    expect(meta.symbolCount).toBeGreaterThanOrEqual(10)
+    // Per-symbol page exists for an exported function.
+    await expect(
+      fs.stat(
+        path.join(
+          FIXTURE_ROOT,
+          '.codewiki',
+          'symbols',
+          'src',
+          'auth',
+          'login.ts',
+          'function.loginUser.md',
+        ),
+      ),
+    ).resolves.toBeTruthy()
+  })
 })
