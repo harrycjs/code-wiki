@@ -46,7 +46,55 @@ const GRAMMAR_PATHS: Partial<Record<LangId, GrammarSpec>> = {
       'node_modules/tree-sitter-javascript/tree-sitter-javascript.wasm',
     ],
   },
-  // M3 will add: python, go, rust, java, c, cpp, ruby.
+  python: {
+    basename: 'tree-sitter-python.wasm',
+    candidateNames: [
+      'dist/grammars/python.wasm',
+      'node_modules/tree-sitter-python/tree-sitter-python.wasm',
+    ],
+  },
+  go: {
+    basename: 'tree-sitter-go.wasm',
+    candidateNames: [
+      'dist/grammars/go.wasm',
+      'node_modules/tree-sitter-go/tree-sitter-go.wasm',
+    ],
+  },
+  rust: {
+    basename: 'tree-sitter-rust.wasm',
+    candidateNames: [
+      'dist/grammars/rust.wasm',
+      'node_modules/tree-sitter-rust/tree-sitter-rust.wasm',
+    ],
+  },
+  java: {
+    basename: 'tree-sitter-java.wasm',
+    candidateNames: [
+      'dist/grammars/java.wasm',
+      'node_modules/tree-sitter-java/tree-sitter-java.wasm',
+    ],
+  },
+  c: {
+    basename: 'tree-sitter-c.wasm',
+    candidateNames: [
+      'dist/grammars/c.wasm',
+      'node_modules/tree-sitter-c/tree-sitter-c.wasm',
+    ],
+  },
+  cpp: {
+    basename: 'tree-sitter-cpp.wasm',
+    candidateNames: [
+      'dist/grammars/cpp.wasm',
+      'node_modules/tree-sitter-cpp/tree-sitter-cpp.wasm',
+    ],
+  },
+  ruby: {
+    basename: 'tree-sitter-ruby.wasm',
+    candidateNames: [
+      'dist/grammars/ruby.wasm',
+      'node_modules/tree-sitter-ruby/tree-sitter-ruby.wasm',
+    ],
+  },
 }
 
 let initPromise: Promise<void> | null = null

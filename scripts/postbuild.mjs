@@ -32,6 +32,13 @@ async function main() {
     ['node_modules/tree-sitter-typescript/tree-sitter-typescript.wasm', 'typescript.wasm'],
     ['node_modules/tree-sitter-typescript/tree-sitter-tsx.wasm', 'tsx.wasm'],
     ['node_modules/tree-sitter-javascript/tree-sitter-javascript.wasm', 'javascript.wasm'],
+    ['node_modules/tree-sitter-python/tree-sitter-python.wasm', 'python.wasm'],
+    ['node_modules/tree-sitter-go/tree-sitter-go.wasm', 'go.wasm'],
+    ['node_modules/tree-sitter-rust/tree-sitter-rust.wasm', 'rust.wasm'],
+    ['node_modules/tree-sitter-java/tree-sitter-java.wasm', 'java.wasm'],
+    ['node_modules/tree-sitter-c/tree-sitter-c.wasm', 'c.wasm'],
+    ['node_modules/tree-sitter-cpp/tree-sitter-cpp.wasm', 'cpp.wasm'],
+    ['node_modules/tree-sitter-ruby/tree-sitter-ruby.wasm', 'ruby.wasm'],
   ]
   for (const [src, dst] of grammarPairs) {
     try {
