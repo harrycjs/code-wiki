@@ -180,6 +180,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     const candidates = [
       path.join(cwd, cfg.outDir, `files/${id}.md`),
       path.join(cwd, cfg.outDir, `modules/${id}.md`),
+      path.join(cwd, cfg.outDir, `symbols/${id.replace('::', '/')}.md`),
     ]
     for (const c of candidates) {
       try {
@@ -190,6 +191,65 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       }
     }
     return { content: [{ type: 'text', text: `No wiki page matches ${id}` }], isError: true }
+  }
+
+  if (name === 'wiki_callers' || name === 'wiki_callees') {
+    const symbolId = String(args.symbolId ?? '')
+    const graphPath = path.join(cwd, cfg.outDir, '.graph.json')
+    const graph = await readJson<{
+      imports: Array<{ from: string; to: string; specifiers: string[] }>
+      calls: Array<{ from: string; to: string; line: number }>
+      dependents: Record<string, string[]>
+    }>(graphPath)
+    if (!graph) {
+      return {
+        content: [{ type: 'text', text: `No .graph.json found. Run \`codewiki build\` first.` }],
+        isError: true,
+      }
+    }
+    const fileOf = symbolId.split('::')[0] ?? ''
+    if (name === 'wiki_callers') {
+      const deps = graph.dependents[fileOf] ?? []
+      // Also surface direct import callers (filter out bare specifiers).
+      const localCallers = graph.imports
+        .filter((e) => e.to === fileOf)
+        .map((e) => e.from)
+      return {
+        content: [
+          {
+            type: 'text',
+            text: JSON.stringify(
+              {
+                note: 'M4: callers from import graph. Call edges land in v0.2.',
+                symbolId,
+                file: fileOf,
+                importers: [...new Set([...deps, ...localCallers])],
+              },
+              null,
+              2,
+            ),
+          },
+        ],
+      }
+    }
+    const imports = graph.imports.filter((e) => e.from === fileOf)
+    return {
+      content: [
+        {
+          type: 'text',
+          text: JSON.stringify(
+            {
+              note: 'M4: callees from import graph. Call edges land in v0.2.',
+              symbolId,
+              file: fileOf,
+              imports,
+            },
+            null,
+            2,
+          ),
+        },
+      ],
+    }
   }
 
   return {

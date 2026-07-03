@@ -24,6 +24,7 @@ import {
 } from './render/file-page.js'
 import type {
   FileIndex,
+  ImportEdge,
   IndexTree,
   Language,
   ModuleInfo,
@@ -33,6 +34,7 @@ import type {
 import { SCHEMA_VERSION } from './types.js'
 import { extractSymbols, isExtractable } from './extract/index.js'
 import { buildSymbolPage, renderSymbol } from './render/symbol-page.js'
+import { computeDependents, extractImports } from './graph/imports.js'
 
 /**
  * Orchestrator: walks the repo, builds in-memory index, renders pages,
@@ -198,6 +200,30 @@ export async function buildWiki(opts: BuildOptions): Promise<BuildResult> {
   await writeJson(path.join(outNew, '.meta.json'), meta)
   const tree: IndexTree = buildIndexTree(files, modules, filePagePaths, moduleTokens)
   await writeJson(path.join(outNew, '.index.json'), tree)
+
+  // M4: graph extraction (imports + dependents; calls land in v0.2).
+  // We re-read each file here rather than threading source through the loop to
+  // keep the FileIndex type small. The cost is one fs.readFile per file, which
+  // is ~µs and dominated by the tree-sitter extraction that just ran.
+  const importEdges: ImportEdge[] = []
+  for (const f of files) {
+    if (!f.language) continue
+    let content = ''
+    try {
+      content = await fs.readFile(f.absPath, 'utf8')
+    } catch {
+      continue
+    }
+    const edges = await extractImports(content, f.repoPath, f.language)
+    importEdges.push(...edges)
+  }
+  const dependents = computeDependents(importEdges)
+  await writeJson(path.join(outNew, '.graph.json'), {
+    schemaVersion: SCHEMA_VERSION,
+    imports: importEdges,
+    calls: [],
+    dependents,
+  })
 
   // Atomic swap
   await replaceDir(outAbs, outNew)
