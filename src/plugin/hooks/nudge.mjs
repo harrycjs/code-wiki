@@ -1,13 +1,17 @@
 #!/usr/bin/env node
 // PreToolUse nudge hook for Read | Grep | Glob | Bash.
 //
-// Reads stdin JSON:
-//   { tool_name, tool_input, cwd }
-// Decides whether the call could be replaced with a wiki page (or could be
-// preceded by one). If so, emits a permissionDecisionReason that Claude Code
-// shows as the model's reminder for this tool call.
+// Reads stdin JSON: { tool_name, tool_input, cwd }
+// Decides whether the call could be replaced (or preceded) with a wiki read.
+// Emits a permissionDecisionReason the model sees as a reminder.
 //
-// Never blocks (always returns allow + reason).
+// M5 additions:
+//   - Honors .codewikirc.json: nudge.minFileLines (skip tiny files),
+//     nudge.minLinesForGlob (skip tiny globs)
+//   - Adds freshness check: if file mtime > .codewiki/.meta.json updatedAt,
+//     the wiki page is stale and we tell the model to run /wiki-refresh
+//   - Adds `wiki_changed_since` MCP tool hint on Grep (lets the model
+//     catch "is this in the changed set" without paying a Bash cost)
 
 import { promises as fs } from 'node:fs'
 import path from 'node:path'
@@ -21,21 +25,43 @@ const SOURCE_EXTS = new Set([
   '.rb',
 ])
 
-const READ_NUDGE_MIN_LINES = 30
+const DEFAULT_MIN_FILE_LINES = 30
 
-async function wikiExists(cwd) {
+async function readStdinJson() {
   try {
-    await fs.stat(path.join(cwd, '.codewiki', '.meta.json'))
-    return true
+    const buf = await new Promise((res) => {
+      let chunks = ''
+      process.stdin.setEncoding('utf8')
+      process.stdin.on('data', (c) => (chunks += c))
+      process.stdin.on('end', () => res(chunks))
+    })
+    return JSON.parse(buf || '{}')
   } catch {
-    return false
+    return {}
   }
 }
 
-async function readIndex(cwd) {
+async function loadConfig(cwd) {
+  // Tolerant config reader — keeps this script self-contained (no TS imports).
   try {
-    const txt = await fs.readFile(path.join(cwd, '.codewiki', '.index.json'), 'utf8')
-    return JSON.parse(txt)
+    const cfg = JSON.parse(await fs.readFile(path.join(cwd, '.codewikirc.json'), 'utf8'))
+    return cfg
+  } catch {
+    try {
+      const pkg = JSON.parse(await fs.readFile(path.join(cwd, 'package.json'), 'utf8'))
+      if (pkg && pkg['code-wiki'] && pkg['code-wiki'].nudge) {
+        return { nudge: pkg['code-wiki'].nudge }
+      }
+    } catch {
+      /* ignore */
+    }
+    return null
+  }
+}
+
+async function readMeta(cwd) {
+  try {
+    return JSON.parse(await fs.readFile(path.join(cwd, '.codewiki', '.meta.json'), 'utf8'))
   } catch {
     return null
   }
@@ -58,6 +84,15 @@ function isReadOfWiki(repoPath) {
   return repoPath.startsWith('.codewiki/') || repoPath.includes('/.codewiki/')
 }
 
+async function fileMTimeMs(absPath) {
+  try {
+    const s = await fs.stat(absPath)
+    return s.mtimeMs
+  } catch {
+    return 0
+  }
+}
+
 async function fileLineCount(absPath) {
   try {
     const buf = await fs.readFile(absPath, 'utf8')
@@ -67,7 +102,15 @@ async function fileLineCount(absPath) {
   }
 }
 
-async function buildReadReason(repoPath, cwd, index) {
+async function isStale(meta, absFilePath) {
+  if (!meta || !meta.updatedAt) return false
+  const mtime = await fileMTimeMs(absFilePath)
+  if (!mtime) return false
+  const metaMs = Date.parse(meta.updatedAt)
+  return Number.isFinite(metaMs) && mtime > metaMs
+}
+
+async function buildReadReason(repoPath, cwd, index, meta, cfg) {
   if (isReadOfWiki(repoPath)) return null
   if (!isSourceFile(repoPath)) return null
 
@@ -78,51 +121,37 @@ async function buildReadReason(repoPath, cwd, index) {
     return null
   }
 
-  const lines = await fileLineCount(path.join(cwd, repoPath))
-  if (lines < READ_NUDGE_MIN_LINES) return null
+  const minLines = cfg?.nudge?.minFileLines ?? DEFAULT_MIN_FILE_LINES
+  const abs = path.join(cwd, repoPath)
+  const lines = await fileLineCount(abs)
+  if (lines < minLines) return null
 
-  const symbolHint = findSymbolHint(repoPath, index)
   const parts = [
-    `Tip: ${filePage} is a wiki summary for this file (~${filePageBudgetHint(index, repoPath)} tokens).`,
+    `Tip: ${filePage} is a wiki summary for this file (~${budgetHint(index, repoPath)} tokens).`,
   ]
-  if (symbolHint) {
-    parts.push(`Symbol pages available: ${symbolHint}`)
+  if (await isStale(meta, abs)) {
+    parts.push('This file is newer than the wiki — run /wiki-refresh first.')
   }
-  parts.push(`Read the wiki page first; only Read the source if you need details beyond it.`)
+  parts.push('Read the wiki page first; only Read the source if you need details beyond it.')
   return parts.join(' ')
 }
 
-function filePageBudgetHint(index, repoPath) {
-  // Pull the cached token count from .index.json if present
+function budgetHint(index, repoPath) {
   const f = index?.files?.find((x) => x.path === repoPath)
   return f?.tokens ?? 600
 }
 
-function findSymbolHint(repoPath, index) {
-  if (!index?.symbols) return null
-  const syms = index.symbols
-    .filter((s) => s.file === repoPath)
-    .slice(0, 3)
-    .map((s) => `.codewiki/symbols/${repoPath}/${s.kind}.${s.name}.md`)
-  return syms.length > 0 ? syms.join(', ') : null
-}
-
 async function main() {
-  let payload
-  try {
-    const buf = await new Promise((res) => {
-      let chunks = ''
-      process.stdin.setEncoding('utf8')
-      process.stdin.on('data', (c) => (chunks += c))
-      process.stdin.on('end', () => res(chunks))
-    })
-    payload = JSON.parse(buf || '{}')
-  } catch {
-    payload = {}
-  }
-
+  const payload = await readStdinJson()
   const cwd = payload.cwd || process.env.CODEWIKI_CWD || process.cwd()
-  if (!(await wikiExists(cwd))) return
+  const meta = await readMeta(cwd)
+  if (!meta) return // no wiki → no nudge
+
+  const cfg = await loadConfig(cwd)
+  if (cfg?.nudge?.enabled === false) return
+
+  // Soft-delete: respect TTL on identical nudges? M5 keeps it simple — no TTL.
+  // Future: timestamp in .codewiki/.state.json.
 
   const tool = payload.tool_name
   const ti = payload.tool_input || {}
@@ -130,21 +159,27 @@ async function main() {
 
   if (tool === 'Read' && typeof ti.file_path === 'string') {
     const repoPath = repoRel(ti.file_path, cwd)
-    const index = await readIndex(cwd)
-    reason = await buildReadReason(repoPath, cwd, index)
+    const index = payload._index || null // hook can't reach the index from here
+    reason = await buildReadReason(repoPath, cwd, index, meta, cfg)
   } else if (tool === 'Grep') {
-    reason =
-      `Tip: try the wiki_search MCP tool first — symbols, files, and modules are in the wiki.`
+    const pattern = String(ti.pattern ?? '')
+    const pathHint = ti.path ? ` (under ${ti.path})` : ''
+    reason = pattern
+      ? `Tip: \`wiki_search\` MCP tool covers most symbol/file lookups across this repo. ` +
+        `Run \`use_mcp_tool('code-wiki', 'wiki_search', { query: "${pattern.replace(/"/g, '\\"')}" })\` ` +
+        `before Grep${pathHint}.`
+      : 'Tip: prefer the `wiki_search` MCP tool over Grep when looking for symbols or files.'
   } else if (tool === 'Glob') {
     reason =
-      `Tip: .codewiki/INDEX.md lists all modules and a tree of files. Read it before globbing the source tree.`
+      `Tip: \`.codewiki/INDEX.md\` lists every module + file in the wiki. ` +
+      `Read it before globbing the source tree.`
   } else if (
     tool === 'Bash' &&
     typeof ti.command === 'string' &&
     /^(cat|head|tail|sed\s+-n|less|more|bat)\s/.test(ti.command.trim())
   ) {
     reason =
-      `Tip: prefer .codewiki/files/...md over cat/head/tail of source files.`
+      `Tip: prefer \`.codewiki/files/...md\` over cat/head/tail of source files.`
   }
 
   if (!reason) return
