@@ -2,6 +2,15 @@
   "name": "code-wiki",
   "version": "0.1.0",
   "description": "Token-efficient code wiki for Claude Code. Generates a browsable .codewiki/ index so models read summaries on-demand.",
+  "homepage": "https://github.com/harrycjs/code-wiki",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/harrycjs/code-wiki.git"
+  },
+  "bugs": {
+    "url": "https://github.com/harrycjs/code-wiki/issues"
+  },
+  "funding": "https://github.com/harrycjs",
   "license": "Apache-2.0",
   "type": "module",
   "bin": {
@@ -80,6 +89,9 @@
     "tree-sitter",
     "mcp",
     "context",
-    "tokens"
+    "tokens",
+    "anthropic",
+    "ai",
+    "llm"
   ]
 }

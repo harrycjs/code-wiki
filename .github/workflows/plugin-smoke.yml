@@ -1,0 +1,37 @@
+name: Plugin smoke test
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: 'npm'
+      - run: npm ci
+      - run: npm run build
+      - name: Plugin install dry-run
+        run: |
+          set -e
+          # Install Claude Code CLI (manual step in many CI flows; here we
+          # only smoke-test the plugin surface structure, not interactive runs.)
+          if command -v claude >/dev/null 2>&1; then
+            claude plugin install . || true
+            claude plugin list || true
+          else
+            echo "claude CLI not present in CI; skipping interactive install"
+            echo "Plugin surface check:"
+            test -f dist/plugin/manifest.json
+            test -f dist/plugin/CLAUDE.md
+            test -d dist/plugin/commands
+            test -d dist/plugin/hooks
+            echo "OK: plugin surface has $(ls dist/plugin/commands | wc -l) commands, $(ls dist/plugin/hooks | wc -l) hooks"
+          fi
