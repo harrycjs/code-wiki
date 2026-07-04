@@ -3,6 +3,7 @@
 > A Claude Code plugin that turns your repo into a browsable, **token-efficient** code wiki. Models read summaries on-demand instead of grepping source.
 
 [![GitHub](https://img.shields.io/badge/GitHub-harrycjs%2Fcode--wiki-blue)](https://github.com/harrycjs/code-wiki)
+[![npm](https://img.shields.io/npm/v/codebase-wiki)](https://www.npmjs.com/package/codebase-wiki)
 
 Claude reads a 600-token wiki page instead of a 6000-token source file. Models get summaries on-demand, then drill in only when they need the real source.
 
@@ -35,8 +36,8 @@ npm run build
 # so the bundled CLI/MCP can resolve its node_modules.
 bash scripts/install-plugin.sh user
 
-claude plugin marketplace update code-wiki-local
-claude plugin install code-wiki@code-wiki-local
+claude plugin marketplace update codebase-wiki-local
+claude plugin install codebase-wiki@codebase-wiki-local
 ```
 
 Restart Claude Code (plugin registration happens at session start).
@@ -51,9 +52,9 @@ npm run release   # changeset version + npm publish
 Then in any target project:
 
 ```bash
-npm install -g code-wiki            # puts `codewiki` on PATH
+npm install -g codebase-wiki       # puts `codewiki` on PATH
 claude plugin marketplace add <your-github-username>/code-wiki
-claude plugin install code-wiki@code-wiki
+claude plugin install codebase-wiki@code-wiki
 ```
 
 The plugin is then resolvable by the bundled CLI path inside the plugin

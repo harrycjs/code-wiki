@@ -31,8 +31,8 @@ npm install
 npm run build
 
 bash scripts/install-plugin.sh user         # stages plugin + link node_modules
-claude plugin marketplace update code-wiki-local
-claude plugin install code-wiki@code-wiki-local
+claude plugin marketplace update codebase-wiki-local
+claude plugin install codebase-wiki@codebase-wiki-local
 ```
 
 Restart Claude Code so the plugin hooks load.
@@ -44,9 +44,9 @@ Restart Claude Code so the plugin hooks load.
 npm run release                          # changeset version + npm publish
 
 # In each user's project:
-npm install -g code-wiki                 # makes `codewiki` globally available
+npm install -g codebase-wiki             # makes `codewiki` globally available
 /plugin marketplace add <your-github-username>/code-wiki
-/plugin install code-wiki@code-wiki
+/plugin install codebase-wiki@code-wiki
 ```
 
 The plugin is self-contained either way — its slash commands invoke the

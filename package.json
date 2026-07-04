@@ -1,6 +1,6 @@
 {
-  "name": "code-wiki",
-  "version": "0.1.0",
+  "name": "codebase-wiki",
+  "version": "0.2.1",
   "description": "Token-efficient code wiki for Claude Code. Generates a browsable .codewiki/ index so models read summaries on-demand.",
   "homepage": "https://github.com/harrycjs/code-wiki",
   "repository": {
@@ -93,5 +93,8 @@
     "anthropic",
     "ai",
     "llm"
-  ]
+  ],
+  "publishConfig": {
+    "access": "public"
+  }
 }

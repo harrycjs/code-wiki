@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Install the built code-wiki plugin into the local Claude Code plugins dir.
+# Install the built codebase-wiki plugin into the local Claude Code plugins dir.
 #
 # Layout (Claude Code 2.1+):
 #   ~/.claude/plugins/marketplaces/<name>/               <- we create this
@@ -34,10 +34,10 @@ fi
 # Destination: a "local marketplace" containing one plugin.
 case "$PROFILE" in
   user)
-    BASE="$HOME/.claude/plugins/marketplaces/code-wiki-local"
+    BASE="$HOME/.claude/plugins/marketplaces/codebase-wiki-local"
     ;;
   project|local)
-    BASE="$ROOT/.claude-local-marketplace/code-wiki-local"
+    BASE="$ROOT/.claude-local-marketplace/codebase-wiki-local"
     ;;
   *)
     echo "usage: $0 [user|project|local]" >&2
@@ -45,24 +45,24 @@ case "$PROFILE" in
     ;;
 esac
 
-PLUGIN_DIR="$BASE/plugins/code-wiki"
+PLUGIN_DIR="$BASE/plugins/codebase-wiki"
 mkdir -p "$BASE/.claude-plugin" "$PLUGIN_DIR/.claude-plugin" "$PLUGIN_DIR/commands" "$PLUGIN_DIR/hooks" "$PLUGIN_DIR/dist"
 
 # 1. Marketplace manifest
 cat > "$BASE/.claude-plugin/marketplace.json" <<EOF
 {
   "\$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
-  "name": "code-wiki-local",
-  "description": "Local code-wiki plugin built from $ROOT",
+  "name": "codebase-wiki-local",
+  "description": "Local codebase-wiki plugin built from $ROOT",
   "owner": {
     "name": "local-user"
   },
   "plugins": [
     {
-      "name": "code-wiki",
+      "name": "codebase-wiki",
       "description": "Token-efficient code wiki for Claude Code. Generates a browsable .codewiki/ so the model reads summaries on-demand.",
       "version": "0.1.0",
-      "source": "./plugins/code-wiki"
+      "source": "./plugins/codebase-wiki"
     }
   ]
 }
@@ -114,4 +114,4 @@ fi
 
 echo "ok: marketplace staged at $BASE"
 echo "next: claude plugin marketplace add $BASE"
-echo "      claude plugin install code-wiki@code-wiki-local"
+echo "      claude plugin install codebase-wiki@codebase-wiki-local"

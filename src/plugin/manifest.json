@@ -1,5 +1,5 @@
 {
-  "name": "code-wiki",
+  "name": "codebase-wiki",
   "version": "0.1.0",
   "description": "Token-efficient code wiki: builds a browsable .codewiki/ index and nudges the model toward reading summaries instead of raw source files.",
   "author": {

@@ -41,16 +41,23 @@ jobs:
           node-version: 22
           cache: 'npm'
       - run: npm ci
-      - run: npm run build
-      - name: Publish to npm on release-tag
+      - name: Publish to npm (only when changesets are pending)
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
-          if [ -z "$NPM_TOKEN" ]; then
-            echo "NPM_TOKEN not set; skipping publish"
+          set -euo pipefail
+          # Skip cleanly when there's nothing to publish.
+          if ! ls .changeset/*.md 2>/dev/null | grep -v config.json | grep -q .; then
+            echo "no changesets pending — skipping publish"
             exit 0
           fi
+          # Build first so the tarball includes the bumped version string in
+          # its CLI --version output (M2+ used a hardcoded value; we now
+          # read from package.json).
           npx changeset version
           npm run build
+          # --provenance attaches an SLSA provenance statement when the
+          # registry + the token support it; harmless if it falls back.
           npm publish --provenance --access public
+          echo "published $(node -p 'require(\"./package.json\").version')"

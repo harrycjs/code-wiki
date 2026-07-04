@@ -12,6 +12,9 @@ logs/
 .codewiki/
 .codewiki.new/
 
+# Local npm config (contains the publish token — never commit)
+.npmrc
+
 # Editor
 .vscode/
 .idea/

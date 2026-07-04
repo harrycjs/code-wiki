@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import process from 'node:process'
 import path from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { Command } from 'commander'
 import chokidar from 'chokidar'
 import { buildWiki } from '../core/build.js'
@@ -15,7 +16,28 @@ import {
   enqueueInvalidation,
 } from '../core/incremental.js'
 
-const pkg = { name: 'code-wiki', version: '0.1.0' }
+// Read version from this package's package.json. Works for both the
+// bundled CLI (../package.json) and global installs (../package.json too —
+// npm drops the package one level up from the bin shim).
+const here = path.dirname(fileURLToPath(import.meta.url))
+let pkgVersion = '0.0.0'
+for (const candidate of [
+  path.join(here, '..', 'package.json'),
+  path.join(here, '..', '..', 'package.json'),
+  path.join(here, '..', '..', '..', 'package.json'),
+]) {
+  try {
+    const txt = await import('node:fs/promises').then((m) => m.readFile(candidate, 'utf8'))
+    const parsed = JSON.parse(txt)
+    if (parsed?.name === 'codebase-wiki' && parsed.version) {
+      pkgVersion = parsed.version
+      break
+    }
+  } catch {
+    // try next
+  }
+}
+const pkg = { name: 'codebase-wiki', version: pkgVersion }
 
 async function main(): Promise<void> {
   const program = new Command()
@@ -219,11 +241,16 @@ async function main(): Promise<void> {
       const cfg = await loadConfig(cwd)
       const wikiBase = path.join(cwd, cfg.outDir)
       const rel = String(pathOrSymbol).replace(/^\.\//, '')
+      // Symbol ids use "::" (e.g. "src/foo.ts:function.bar"); file paths use "/".
+      // Try the rendered symbol path first when we see "::".
+      const symbolPath = rel.includes('::')
+        ? rel.replace(/::/g, '/') + '.md'
+        : null
       const candidates = [
         path.join(wikiBase, rel.endsWith('.md') ? rel : `${rel}.md`),
         path.join(wikiBase, 'files', `${rel}.md`),
         path.join(wikiBase, 'modules', `${rel}.md`),
-        path.join(wikiBase, 'symbols', `${rel.replace('::', '/')}.md`),
+        ...(symbolPath ? [path.join(wikiBase, 'symbols', symbolPath)] : []),
       ]
       for (const c of candidates) {
         if (await exists(c)) {
