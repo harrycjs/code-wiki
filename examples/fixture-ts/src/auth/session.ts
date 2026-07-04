@@ -39,3 +39,4 @@ export function makeSessionId(): string {
 export function getSession(store: SessionStore, token: string): Session | null {
   return store.get(token)
 }
+// touch

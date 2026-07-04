@@ -2,10 +2,18 @@
 import process from 'node:process'
 import path from 'node:path'
 import { Command } from 'commander'
+import chokidar from 'chokidar'
 import { buildWiki } from '../core/build.js'
 import { loadConfig } from '../core/config.js'
 import { log, child } from '../shared/log.js'
-import { exists, writeJson, readJson } from '../shared/fs.js'
+import { exists, writeJson, readJson, atomicWriteText } from '../shared/fs.js'
+import {
+  loadState,
+  saveState,
+  changedFilesSince,
+  currentHead,
+  enqueueInvalidation,
+} from '../core/incremental.js'
 
 const pkg = { name: 'code-wiki', version: '0.1.0' }
 
@@ -41,16 +49,108 @@ async function main(): Promise<void> {
 
   program
     .command('refresh')
-    .description('Incrementally refresh .codewiki/ based on git diff since last index')
+    .description(
+      'Incrementally refresh .codewiki/. Reports git diff since last index; re-runs the full build (incremental re-render lands in v0.2).',
+    )
     .option('--config <path>', 'path to a config JSON file')
+    .option('--full', 'force a full rebuild')
     .action(async (opts) => {
       const cwd = path.resolve(opts.parent?.cwd ?? process.cwd())
-      const t0 = Date.now()
-      // v1: refresh is identical to build. M6 will add git-diff short-circuit.
-      const result = await buildWiki({ cwd, configPath: opts.config })
+      const state = await loadState(cwd)
+      const head = await currentHead(cwd)
+      const changed = await changedFilesSince(cwd, state.lastHead)
       process.stdout.write(
-        `code-wiki refreshed .codewiki/ in ${result.durationMs}ms\n`,
+        `code-wiki refresh: ${state.lastHead} -> ${head}, ${changed.length} files in git diff.\n`,
       )
+      if (changed.length > 0 && changed.length <= 20) {
+        for (const f of changed) process.stdout.write(`  - ${f}\n`)
+      } else if (changed.length > 20) {
+        for (const f of changed.slice(0, 20)) process.stdout.write(`  - ${f}\n`)
+        process.stdout.write(`  ... and ${changed.length - 20} more\n`)
+      }
+      const t0 = Date.now()
+      const result = await buildWiki({
+        cwd,
+        configPath: opts.config,
+        full: !!opts.full,
+      })
+      const newState = {
+        ...state,
+        lastHead: head,
+        files: state.files, // populated by subsequent invalidations
+      }
+      await saveState(cwd, newState)
+      process.stdout.write(
+        `code-wiki refreshed .codewiki/ in ${Date.now() - t0}ms\n`,
+      )
+      void result
+    })
+
+  program
+    .command('watch')
+    .description(
+      'Watch the working tree and run /wiki-refresh on file changes. Ctrl-C to stop.',
+    )
+    .option('--config <path>', 'path to a config JSON file')
+    .option('--debounce <ms>', 'debounce delay in ms', '500')
+    .action(async (opts) => {
+      const cwd = path.resolve(opts.parent?.cwd ?? process.cwd())
+      const debounceMs = Number(opts.debounce ?? 500)
+      process.stdout.write(`code-wiki watch: cwd=${cwd} (Ctrl-C to stop)\n`)
+      const watcher = chokidar.watch(cwd, {
+        ignored: (p) =>
+          p.includes(`${path.sep}.codewiki${path.sep}`) ||
+          p.includes(`${path.sep}node_modules${path.sep}`) ||
+          p.includes(`${path.sep}.git${path.sep}`) ||
+          p.includes(`${path.sep}dist${path.sep}`) ||
+          p.endsWith('package-lock.json'),
+        ignoreInitial: true,
+        persistent: true,
+        awaitWriteFinish: { stabilityThreshold: 200, pollInterval: 50 },
+      })
+      let pendingTimer: NodeJS.Timeout | null = null
+      const pending = new Set<string>()
+      const flush = async () => {
+        const files = [...pending]
+        pending.clear()
+        for (const f of files) {
+          const rel = path.relative(cwd, f).split(path.sep).join('/')
+          try {
+            await enqueueInvalidation(cwd, rel)
+          } catch {
+            // best-effort; refresh can rebuild regardless
+          }
+        }
+        if (files.length > 0) {
+          process.stdout.write(
+            `code-wiki: ${files.length} change(s) detected, rebuilding...\n`,
+          )
+          try {
+            const r = await buildWiki({ cwd })
+            process.stdout.write(`  -> rebuilt ${r.fileCount} files in ${r.durationMs}ms\n`)
+          } catch (err) {
+            process.stderr.write(`  ! rebuild failed: ${(err as Error).message ?? err}\n`)
+          }
+        }
+      }
+      watcher.on('change', (path) => {
+        if (pendingTimer) clearTimeout(pendingTimer)
+        pending.add(path)
+        pendingTimer = setTimeout(flush, debounceMs)
+      })
+      watcher.on('add', (path) => {
+        if (pendingTimer) clearTimeout(pendingTimer)
+        pending.add(path)
+        pendingTimer = setTimeout(flush, debounceMs)
+      })
+      watcher.on('unlink', (path) => {
+        if (pendingTimer) clearTimeout(pendingTimer)
+        pending.add(path)
+        pendingTimer = setTimeout(flush, debounceMs)
+      })
+
+      // Block forever; SIGINT/SIGTERM stop.
+      await new Promise(() => {})
     })
 
   program
@@ -97,7 +197,6 @@ async function main(): Promise<void> {
       const cfg = await loadConfig(cwd)
       const wikiBase = path.join(cwd, cfg.outDir)
       const rel = String(pathOrSymbol).replace(/^\.\//, '')
-      // Try direct wiki page first.
       const candidates = [
         path.join(wikiBase, rel.endsWith('.md') ? rel : `${rel}.md`),
         path.join(wikiBase, 'files', `${rel}.md`),
@@ -120,19 +219,7 @@ async function main(): Promise<void> {
     .description('Mark a single file for incremental re-render (used by hooks)')
     .action(async (p) => {
       const cwd = path.resolve(process.cwd())
-      const cfg = await loadConfig(cwd)
-      const statePath = path.join(cwd, cfg.outDir, '.state.json')
-      const state = (await readJson<{ files: Record<string, { hash: string; mtimeMs: number; size: number; lastIndexedAt: string; symbols: number; publicSignatureChanged: boolean }>; lastHead: string }>(statePath)) ?? { files: {}, lastHead: 'uncommitted' }
-      state.files[String(p)] ??= {
-        hash: '',
-        mtimeMs: 0,
-        size: 0,
-        lastIndexedAt: new Date().toISOString(),
-        symbols: 0,
-        publicSignatureChanged: true,
-      }
-      state.files[String(p)]!.publicSignatureChanged = true
-      await writeJson(statePath, state)
+      await enqueueInvalidation(cwd, String(p))
     })
 
   program
@@ -178,6 +265,8 @@ async function main(): Promise<void> {
   await program.parseAsync(process.argv)
   void log
   void child
+  void writeJson
+  void atomicWriteText
 }
 
 main().catch((err) => {
