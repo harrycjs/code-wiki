@@ -1,12 +1,12 @@
 ---
 description: Queue LLM enrichment of the wiki using Claude Haiku + Sonnet. Requires ANTHROPIC_API_KEY.
-allowed-tools: Bash(codewiki enrich:*)
+allowed-tools: Bash(node ${CLAUDE_PLUGIN_ROOT}/dist/codewiki.mjs enrich:*), Bash(node ${CLAUDE_PLUGIN_ROOT}/dist/codewiki.mjs enrich)
 ---
 
 # /wiki-enrich
 
-Runs the optional LLM-enrichment pass against `.codewiki/`. Requires
-`ANTHROPIC_API_KEY` in the environment.
+Runs `node ${CLAUDE_PLUGIN_ROOT}/dist/codewiki.mjs enrich`. Requires
+`ANTHROPIC_API_KEY` to be set in the environment.
 
 Behaviour:
 
@@ -18,4 +18,5 @@ Behaviour:
 This command runs in the background by default (the queue is concurrency-bounded
 to 4). Progress is in `.codewiki/.summary-cache/`.
 
-If `ANTHROPIC_API_KEY` is not set, print a one-line warning and exit cleanly.
+If `ANTHROPIC_API_KEY` is not set, the CLI prints a one-line warning and
+exits cleanly — nothing to do.

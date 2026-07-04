@@ -1,6 +1,6 @@
 ---
 description: Show the wiki page for a specific symbol or file (function, class, etc.).
-allowed-tools: Bash(codewiki show:*), Read
+allowed-tools: Bash(node ${CLAUDE_PLUGIN_ROOT}/dist/codewiki.mjs show:*), Bash(node ${CLAUDE_PLUGIN_ROOT}/dist/codewiki.mjs show), Read
 ---
 
 # /wiki-symbol <path>:<name>
@@ -13,7 +13,8 @@ Examples:
 - `/wiki-symbol src/auth/login.ts:class.AuthService`
 - `/wiki-symbol src/auth/login.ts` (the whole file page)
 
-Run `codewiki show "$ARGUMENTS"` and read the result. Summarize:
+Run `node ${CLAUDE_PLUGIN_ROOT}/dist/codewiki.mjs show "$ARGUMENTS"` and read
+the result. Summarize:
 
 1. The symbol's purpose (paraphrase the Description).
 2. Its signature.

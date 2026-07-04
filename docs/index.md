@@ -20,23 +20,38 @@ Typical savings: **60-90%** of "source-read" tokens on a medium codebase.
 
 ## Install
 
-From this repo (in any project):
+Two paths — choose based on whether you've published to npm yet.
 
-```text
-/plugin marketplace add <your-github-username>/code-wiki
-/plugin marketplace update
-/plugin install code-wiki@code-wiki
-```
-
-From source:
+### Path A — local marketplace (no publish, fastest for testing)
 
 ```bash
 git clone https://github.com/<your-github-username>/code-wiki
 cd code-wiki
 npm install
 npm run build
-/plugin install .
+
+bash scripts/install-plugin.sh user         # stages plugin + link node_modules
+claude plugin marketplace update code-wiki-local
+claude plugin install code-wiki@code-wiki-local
 ```
+
+Restart Claude Code so the plugin hooks load.
+
+### Path B — npm-published (recommended for team / public)
+
+```bash
+# In the code-wiki repo with NPM_TOKEN set:
+npm run release                          # changeset version + npm publish
+
+# In each user's project:
+npm install -g code-wiki                 # makes `codewiki` globally available
+/plugin marketplace add <your-github-username>/code-wiki
+/plugin install code-wiki@code-wiki
+```
+
+The plugin is self-contained either way — its slash commands invoke the
+bundled CLI directly via `node ${CLAUDE_PLUGIN_ROOT}/dist/codewiki.mjs`,
+so no global `codewiki` binary is strictly required.
 
 ## Usage
 

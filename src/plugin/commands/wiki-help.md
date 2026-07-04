@@ -1,6 +1,6 @@
 ---
 description: Show available wiki commands.
-allowed-tools: Read
+allowed-tools:
 ---
 
 # /wiki-help
@@ -36,8 +36,14 @@ Print a one-screen summary:
 2. Edit files normally — the PostToolUse hook invalidates changed wiki pages.
 3. Run `/wiki-refresh` after significant edits, or just keep working — the watcher auto-rebuilds.
 
+## Note
+
+The CLI is bundled inside the plugin at
+`${CLAUDE_PLUGIN_ROOT}/dist/codewiki.mjs`. No global `npm install` is
+required — the slash commands invoke it via `node` directly.
+
 ## Auto-nudge
 
 After `/wiki-build`, every `Read | Grep | Glob | Bash cat/head/tail` call you
-make will receive a one-line reminder pointing at the corresponding `.codewiki/`
+make will receive a one-line reminder pointing at the matching `.codewiki/`
 page. This is the source of the token savings — lean into it.

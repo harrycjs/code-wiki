@@ -30,6 +30,9 @@ const GRAMMAR_PATHS: Partial<Record<LangId, GrammarSpec>> = {
     candidateNames: [
       'dist/grammars/typescript.wasm',
       'node_modules/tree-sitter-typescript/tree-sitter-typescript.wasm',
+      // Bundled plugin: chunks live at dist/chunks/*.mjs; grammars live at
+      // dist/grammars/*.wasm. We compute the chunk's dirname lazily.
+      `__import_meta_dirname__/../grammars/typescript.wasm`,
     ],
   },
   tsx: {
@@ -37,6 +40,7 @@ const GRAMMAR_PATHS: Partial<Record<LangId, GrammarSpec>> = {
     candidateNames: [
       'dist/grammars/tsx.wasm',
       'node_modules/tree-sitter-typescript/tree-sitter-tsx.wasm',
+      `__import_meta_dirname__/../grammars/tsx.wasm`,
     ],
   },
   javascript: {
@@ -44,6 +48,7 @@ const GRAMMAR_PATHS: Partial<Record<LangId, GrammarSpec>> = {
     candidateNames: [
       'dist/grammars/javascript.wasm',
       'node_modules/tree-sitter-javascript/tree-sitter-javascript.wasm',
+      `__import_meta_dirname__/../grammars/javascript.wasm`,
     ],
   },
   python: {
@@ -51,6 +56,7 @@ const GRAMMAR_PATHS: Partial<Record<LangId, GrammarSpec>> = {
     candidateNames: [
       'dist/grammars/python.wasm',
       'node_modules/tree-sitter-python/tree-sitter-python.wasm',
+      `__import_meta_dirname__/../grammars/python.wasm`,
     ],
   },
   go: {
@@ -58,6 +64,7 @@ const GRAMMAR_PATHS: Partial<Record<LangId, GrammarSpec>> = {
     candidateNames: [
       'dist/grammars/go.wasm',
       'node_modules/tree-sitter-go/tree-sitter-go.wasm',
+      `__import_meta_dirname__/../grammars/go.wasm`,
     ],
   },
   rust: {
@@ -65,6 +72,7 @@ const GRAMMAR_PATHS: Partial<Record<LangId, GrammarSpec>> = {
     candidateNames: [
       'dist/grammars/rust.wasm',
       'node_modules/tree-sitter-rust/tree-sitter-rust.wasm',
+      `__import_meta_dirname__/../grammars/rust.wasm`,
     ],
   },
   java: {
@@ -72,6 +80,7 @@ const GRAMMAR_PATHS: Partial<Record<LangId, GrammarSpec>> = {
     candidateNames: [
       'dist/grammars/java.wasm',
       'node_modules/tree-sitter-java/tree-sitter-java.wasm',
+      `__import_meta_dirname__/../grammars/java.wasm`,
     ],
   },
   c: {
@@ -79,6 +88,7 @@ const GRAMMAR_PATHS: Partial<Record<LangId, GrammarSpec>> = {
     candidateNames: [
       'dist/grammars/c.wasm',
       'node_modules/tree-sitter-c/tree-sitter-c.wasm',
+      `__import_meta_dirname__/../grammars/c.wasm`,
     ],
   },
   cpp: {
@@ -86,6 +96,7 @@ const GRAMMAR_PATHS: Partial<Record<LangId, GrammarSpec>> = {
     candidateNames: [
       'dist/grammars/cpp.wasm',
       'node_modules/tree-sitter-cpp/tree-sitter-cpp.wasm',
+      `__import_meta_dirname__/../grammars/cpp.wasm`,
     ],
   },
   ruby: {
@@ -93,8 +104,22 @@ const GRAMMAR_PATHS: Partial<Record<LangId, GrammarSpec>> = {
     candidateNames: [
       'dist/grammars/ruby.wasm',
       'node_modules/tree-sitter-ruby/tree-sitter-ruby.wasm',
+      `__import_meta_dirname__/../grammars/ruby.wasm`,
     ],
   },
+}
+
+/**
+ * Replace the `__import_meta_dirname__` sentinel with this module's
+ * enclosing directory. Webpack/rollup don't expand `import.meta.dirname`
+ * in most build configs, so we patch the runtime candidate list as we
+ * resolve it.
+ */
+function expandImportMetaDirname(candidates: string[]): string[] {
+  if (typeof import.meta.dirname !== 'string') return candidates
+  return candidates.map((c) =>
+    c.includes('__import_meta_dirname__') ? c.replace(/__import_meta_dirname__/g, import.meta.dirname) : c,
+  )
 }
 
 let initPromise: Promise<void> | null = null
@@ -110,10 +135,23 @@ async function ensureParserInit(): Promise<void> {
 }
 
 async function findWasm(candidates: string[]): Promise<string | null> {
-  // Walk up from cwd, checking each candidate under each ancestor.
+  // 1) Try absolute candidates first (sentinel-replaced paths via import.meta.dirname).
+  // 2) Then walk up from cwd checking each candidate under each ancestor.
+  const expanded = expandImportMetaDirname(candidates)
+  for (const rel of expanded) {
+    if (path.isAbsolute(rel)) {
+      try {
+        await fs.access(rel)
+        return rel
+      } catch {
+        // continue
+      }
+    }
+  }
   let cwd = process.cwd()
   for (let i = 0; i < 8; i++) {
-    for (const rel of candidates) {
+    for (const rel of expanded) {
+      if (path.isAbsolute(rel)) continue
       const abs = path.join(cwd, rel)
       try {
         await fs.access(abs)

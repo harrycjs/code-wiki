@@ -1,6 +1,6 @@
 ---
 description: Show callers and callees of a symbol.
-allowed-tools: Bash(codewiki show:*), Read
+allowed-tools: Bash(node ${CLAUDE_PLUGIN_ROOT}/dist/codewiki.mjs show:*), Bash(node ${CLAUDE_PLUGIN_ROOT}/dist/codewiki.mjs show), Read
 ---
 
 # /wiki-graph <symbol>

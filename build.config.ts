@@ -17,21 +17,12 @@ export default defineBuildConfig({
     },
   ],
   clean: true,
-  externals: [
-    '@anthropic-ai/sdk',
-    '@modelcontextprotocol/sdk',
-    'commander',
-    'globby',
-    'gpt-tokenizer',
-    'ignore',
-    'p-queue',
-    'p-retry',
-    'pino',
-    'simple-git',
-    'web-tree-sitter',
-  ],
+  // We do NOT use `externals` — the plugin must be self-contained and
+  // runnable without a package.json pointer at the install location.
+  // Dependencies (commander, p-queue, pino, tree-sitter grammars, etc.)
+  // get inlined into dist/chunks/*. mjs by unbuild's rollup.
   rollup: {
-    inlineDependencies: false,
+    inlineDependencies: true,
   },
   failOnWarn: false,
   outDir: 'dist',

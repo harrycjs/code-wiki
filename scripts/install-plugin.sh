@@ -15,14 +15,19 @@ set -euo pipefail
 PROFILE="${1:-user}"
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 SRC="$ROOT/dist/plugin"
-DIST_FILE="$ROOT/dist/code-wiki-mcp.mjs"
+CLI_FILE="$ROOT/dist/codewiki.mjs"
+MCP_FILE="$ROOT/dist/code-wiki-mcp.mjs"
 
 if [ ! -d "$SRC" ]; then
   echo "error: $SRC not found. Run 'npm run build' first." >&2
   exit 1
 fi
-if [ ! -f "$DIST_FILE" ]; then
-  echo "error: $DIST_FILE not found. Run 'npm run build' first." >&2
+if [ ! -f "$CLI_FILE" ]; then
+  echo "error: $CLI_FILE not found. Run 'npm run build' first." >&2
+  exit 1
+fi
+if [ ! -f "$MCP_FILE" ]; then
+  echo "error: $MCP_FILE not found. Run 'npm run build' first." >&2
   exit 1
 fi
 
@@ -71,7 +76,41 @@ cp "$SRC/.mcp.json"                        "$PLUGIN_DIR/"
 cp "$SRC/CLAUDE.md"                         "$PLUGIN_DIR/"
 cp -r "$SRC/commands/."                    "$PLUGIN_DIR/commands/"
 cp -r "$SRC/hooks/."                        "$PLUGIN_DIR/hooks/"
-cp "$DIST_FILE"                            "$PLUGIN_DIR/dist/"
+
+# 3. Bundle the dist tree (CLI + MCP server + their chunks/shared dirs + WASM
+#    grammars). unbuild emits code that references sibling `chunks/*` and
+#    `shared/*` via relative paths, so we need the whole tree — not just the
+#    top-level .mjs files. We skip dist/plugin to avoid copying into itself.
+mkdir -p "$PLUGIN_DIR/dist"
+for f in "$ROOT"/dist/*; do
+  base="$(basename "$f")"
+  [ "$base" = "plugin" ] && continue
+  if [ -d "$f" ]; then
+    cp -r "$f" "$PLUGIN_DIR/dist/"
+  else
+    cp "$f" "$PLUGIN_DIR/dist/"
+  fi
+done
+
+# 4. Provide `node_modules/` so the bundled CLI/MCP can resolve packages that
+#    unbuild couldn't inline (pino etc.). We make a junction so a future
+#    `npm install` in the project doesn't bloat the install further. On
+#    Windows we use cmd.exe for the link because Git Bash sometimes can't
+#    make junctions across drives; Git Bash's `ln -s` produces a real symlink.
+if [ ! -e "$PLUGIN_DIR/node_modules" ]; then
+  case "$(uname -s 2>/dev/null || echo Windows)" in
+    Linux|Darwin)
+      ln -s "$ROOT/node_modules" "$PLUGIN_DIR/node_modules"
+      echo "linked node_modules (symlink)"
+      ;;
+    *)
+      # Git Bash on Windows: use a junction (mklink /J) so Windows + Node see it.
+      cmd.exe //c "mklink /J \"$PLUGIN_DIR\\node_modules\" \"$ROOT\\node_modules\"" >/dev/null 2>&1 \
+        && echo "linked node_modules (junction)" \
+        || echo "warn: failed to create node_modules junction; CLI may fail to resolve deps"
+      ;;
+  esac
+fi
 
 echo "ok: marketplace staged at $BASE"
 echo "next: claude plugin marketplace add $BASE"
