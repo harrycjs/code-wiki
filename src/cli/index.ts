@@ -48,6 +48,28 @@ async function main(): Promise<void> {
     })
 
   program
+    .command('enrich')
+    .description(
+      'Optional LLM enrichment (requires ANTHROPIC_API_KEY). File-level + module-level via Claude Haiku + Sonnet.',
+    )
+    .option('--config <path>', 'path to a config JSON file')
+    .action(async (opts) => {
+      const cwd = path.resolve(opts.parent?.cwd ?? process.cwd())
+      if (!process.env.ANTHROPIC_API_KEY) {
+        process.stderr.write(
+          'codewiki enrich: ANTHROPIC_API_KEY not set. Skipping (zero cost).\n',
+        )
+        process.exit(0)
+      }
+      process.stdout.write('codewiki enrich: starting file + module passes...\n')
+      const { ensureCacheDir, runEnrichmentCli } = await import('../core/summary/llm.js')
+      await ensureCacheDir(cwd)
+      const t0 = Date.now()
+      await runEnrichmentCli(cwd)
+      process.stdout.write(`codewiki enrich: done in ${Date.now() - t0}ms\n`)
+    })
+
+  program
     .command('refresh')
     .description(
       'Incrementally refresh .codewiki/. Reports git diff since last index; re-runs the full build (incremental re-render lands in v0.2).',
