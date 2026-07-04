@@ -162,7 +162,25 @@ export async function buildWiki(opts: BuildOptions): Promise<BuildResult> {
     },
   }
 
-  const arch = buildArchitecturePage(meta, files, cfg)
+  // M4/M8: extract imports + dependents first so architecture + module pages
+  // can render dependency diagrams inline. We re-read each file here rather
+  // than threading source through the loop. Cost: ~µs per file, dominated by
+  // the tree-sitter extraction that already ran.
+  const importEdges: ImportEdge[] = []
+  for (const f of files) {
+    if (!f.language) continue
+    let content = ''
+    try {
+      content = await fs.readFile(f.absPath, 'utf8')
+    } catch {
+      continue
+    }
+    const edges = await extractImports(content, f.repoPath, f.language)
+    importEdges.push(...edges)
+  }
+  const dependents = computeDependents(importEdges)
+
+  const arch = buildArchitecturePage(meta, files, cfg, importEdges, dependents)
   await writeText(outNew, 'architecture.md', renderArchitecture(arch.page, arch.body))
 
   // Per-file pages AND per-symbol pages (M2: TS/JS family extracted symbols).
@@ -181,9 +199,9 @@ export async function buildWiki(opts: BuildOptions): Promise<BuildResult> {
     }
   }
 
-  // Per-module pages
+  // Per-module pages (M8: passes import edges + dependents for dep diagram).
   for (const [id, m] of modules) {
-    const mp = buildModulePage(m, files, filePagePaths, cfg)
+    const mp = buildModulePage(m, files, filePagePaths, cfg, importEdges, dependents)
     moduleTokens.set(id, mp.tokens)
     const safePath = path.join(outNew, 'modules', `${id}.md`)
     await fs.mkdir(path.dirname(safePath), { recursive: true })
@@ -201,23 +219,7 @@ export async function buildWiki(opts: BuildOptions): Promise<BuildResult> {
   const tree: IndexTree = buildIndexTree(files, modules, filePagePaths, moduleTokens)
   await writeJson(path.join(outNew, '.index.json'), tree)
 
-  // M4: graph extraction (imports + dependents; calls land in v0.2).
-  // We re-read each file here rather than threading source through the loop to
-  // keep the FileIndex type small. The cost is one fs.readFile per file, which
-  // is ~µs and dominated by the tree-sitter extraction that just ran.
-  const importEdges: ImportEdge[] = []
-  for (const f of files) {
-    if (!f.language) continue
-    let content = ''
-    try {
-      content = await fs.readFile(f.absPath, 'utf8')
-    } catch {
-      continue
-    }
-    const edges = await extractImports(content, f.repoPath, f.language)
-    importEdges.push(...edges)
-  }
-  const dependents = computeDependents(importEdges)
+  // Graph already extracted above; just persist the artifact here.
   await writeJson(path.join(outNew, '.graph.json'), {
     schemaVersion: SCHEMA_VERSION,
     imports: importEdges,

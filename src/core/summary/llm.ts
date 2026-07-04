@@ -32,7 +32,7 @@ import type { CodeWikiConfig } from '../config.js'
  *   - Module pages substitute the LLM summary if present.
  */
 
-interface AnthropicLike {
+export interface AnthropicLike {
   messages: (args: { model: string; max_tokens: number; messages: { role: 'user' | 'assistant'; content: string }[] }) => Promise<{ content: Array<{ type: string; text: string }> }>
 }
 
